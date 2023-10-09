@@ -108,6 +108,23 @@ func (my *ChatModel) Decode(input []int) string {
 	return my.tokenizer.Decode(input)
 }
 
+func (my *ChatModel) EvalSequence(tokens []int, state []float32) ([]float32, []float32) {
+	if state == nil {
+		state = make([]float32, my.cRwkv.RwkvGetStateLength(my.ctx))
+		my.cRwkv.RwkvInitState(my.ctx, state)
+	}
+
+	var logits = make([]float32, my.cRwkv.RwkvGetLogitsLength(my.ctx))
+	for _, token := range tokens {
+		var err = my.cRwkv.RwkvEval(my.ctx, uint32(token), state, state, logits)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return state, logits
+}
+
 func (my *ChatModel) Eval(tokens []int) (string, error) {
 	var state = make([]float32, my.cRwkv.RwkvGetStateLength(my.ctx))
 	my.cRwkv.RwkvInitState(my.ctx, state)
