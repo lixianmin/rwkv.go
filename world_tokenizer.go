@@ -17,35 +17,31 @@ var worldTokenizerFS embed.FS
 
 // Trie represents the trie data structure
 type Trie struct {
-	ch     byte
 	to     []*Trie
 	values map[int]byte
-	front  *Trie
 }
 
-func NewTrie(front *Trie, ch byte) *Trie {
+func NewTrie() *Trie {
 	var trie = &Trie{
-		ch:     ch,
 		to:     make([]*Trie, 256),
 		values: make(map[int]byte),
-		front:  front,
 	}
 
 	return trie
 }
 
-func (my *Trie) Add(key string, idx int, val int) *Trie {
-	if idx == len(key) {
-		my.values[val] = 0
+func (my *Trie) Add(key string, index int, value int) *Trie {
+	if index == len(key) {
+		my.values[value] = 0
 		return my
 	}
 
-	var ch = key[idx]
+	var ch = key[index]
 	if my.to[ch] == nil {
-		my.to[ch] = NewTrie(my, ch)
+		my.to[ch] = NewTrie()
 	}
 
-	return my.to[ch].Add(key, idx+1, val)
+	return my.to[ch].Add(key, index+1, value)
 }
 
 func (my *Trie) FindLongest(key string, index int) (retIndex int, retToken int) {
@@ -79,7 +75,6 @@ func (my *Trie) FindLongest(key string, index int) (retIndex int, retToken int) 
 // WorldTokenizer represents a tokenizer for encoding and decoding bytes to tokens
 type WorldTokenizer struct {
 	IndexToToken map[int]string
-	TokenToIndex map[string]int
 	Trie         *Trie
 }
 
@@ -93,8 +88,7 @@ func NewWorldTokenizer() (*WorldTokenizer, error) {
 
 	wt := &WorldTokenizer{
 		IndexToToken: make(map[int]string),
-		TokenToIndex: make(map[string]int),
-		Trie:         NewTrie(nil, 0),
+		Trie:         NewTrie(),
 	}
 
 	scanner := bufio.NewScanner(f)
@@ -120,7 +114,6 @@ func NewWorldTokenizer() (*WorldTokenizer, error) {
 		}
 
 		wt.IndexToToken[index] = token
-		wt.TokenToIndex[token] = index
 		wt.Trie.Add(token, 0, index)
 	}
 
@@ -133,7 +126,7 @@ func NewWorldTokenizer() (*WorldTokenizer, error) {
 
 // EncodeBytes encodes bytes to tokens
 func (wt *WorldTokenizer) EncodeBytes(src string) []int {
-	var tokens []int
+	var tokens = make([]int, 0, len(src))
 	var index, token = 0, 0
 
 	for index < len(src) {
@@ -154,8 +147,10 @@ func (wt *WorldTokenizer) DecodeBytes(tokens []int) []byte {
 }
 
 // Encode encodes a string to tokens
-func (wt *WorldTokenizer) Encode(src string) ([]int, error) {
-	return wt.EncodeBytes(src), nil
+func (wt *WorldTokenizer) Encode(text string) ([]int, error) {
+	// this method is extremely fast, a text with 200 word only cost about 55.125µs
+	var tokens = wt.EncodeBytes(text)
+	return tokens, nil
 }
 
 // Decode decodes tokens to a string
