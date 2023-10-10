@@ -137,15 +137,6 @@ func (wt *WorldTokenizer) EncodeBytes(src string) []int {
 	return tokens
 }
 
-// DecodeBytes decodes tokens to bytes
-func (wt *WorldTokenizer) DecodeBytes(tokens []int) []byte {
-	var result []byte
-	for _, token := range tokens {
-		result = append(result, []byte(wt.IndexToToken[token])...)
-	}
-	return result
-}
-
 // Encode encodes a string to tokens
 func (wt *WorldTokenizer) Encode(text string) ([]int, error) {
 	// this method is extremely fast, a text with 200 word only cost about 55.125µs
@@ -155,7 +146,13 @@ func (wt *WorldTokenizer) Encode(text string) ([]int, error) {
 
 // Decode decodes tokens to a string
 func (wt *WorldTokenizer) Decode(tokens []int) string {
-	return string(wt.DecodeBytes(tokens))
+	var results = make([]string, len(tokens))
+	for i, token := range tokens {
+		results[i] = wt.IndexToToken[token]
+	}
+
+	var text = strings.Join(results, "")
+	return text
 }
 
 func parseInput(input string, size int) (string, error) {
