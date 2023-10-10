@@ -1,4 +1,4 @@
-module github.com/seasonjs/rwkv
+module github.com/lixianmin/rwkv.go
 
 go 1.19
 
