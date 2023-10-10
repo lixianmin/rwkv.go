@@ -115,9 +115,10 @@ func (my *ChatModel) EvalSequence(tokens []int, state []float32) ([]float32, []f
 	}
 
 	var logits = make([]float32, my.cRwkv.RwkvGetLogitsLength(my.ctx))
-	for _, token := range tokens {
+	for i, token := range tokens {
 		var err = my.cRwkv.RwkvEval(my.ctx, uint32(token), state, state, logits)
 		if err != nil {
+			print(err, i) // we need `i` for test purpose
 			panic(err)
 		}
 	}
