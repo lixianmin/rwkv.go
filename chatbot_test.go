@@ -21,7 +21,7 @@ func TestNewChatbot(t *testing.T) {
 		Temperature:   0.8,
 		TopP:          0.5,
 		TokenizerType: World,
-		CpuThreads:    10,
+		CpuThreads:    2, // 这个线程数不能开太多, 我的电脑一共才8个cpu, 开10线程会导致所有app都忙不过来
 	}
 
 	var model, err = NewChatModel(modelPath, options)
