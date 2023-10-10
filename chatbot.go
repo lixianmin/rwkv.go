@@ -48,14 +48,19 @@ func NewChatbot(model *ChatModel, userName string, botName string, prompt string
 		avoidRepeatTokens: avoidRepeatTokens,
 	}
 
-	chatbot.initPrompt(prompt)
+	_ = chatbot.initPrompt(prompt)
 	return chatbot
 }
 
-func (my *Chatbot) initPrompt(prompt string) {
-	var tokens, _ = my.model.Encode(prompt)
+func (my *Chatbot) initPrompt(prompt string) error {
+	var tokens, err = my.model.Encode(prompt)
+	if err != nil {
+		return err
+	}
+
 	var state, _ = my.runRnn(tokens, nil, 0)
 	my.promptState = state
+	return nil
 }
 
 func (my *Chatbot) runRnn(tokens []int, state []float32, newlineAdj float32) ([]float32, []float32) {
@@ -67,6 +72,7 @@ func (my *Chatbot) runRnn(tokens []int, state []float32, newlineAdj float32) ([]
 	for _, avoid := range my.avoidRepeatTokens {
 		if avoid == last {
 			logits[lastIndex] = -999999999
+			break
 		}
 	}
 
@@ -78,13 +84,17 @@ func (my *Chatbot) Process(message string) string {
 	message = strings.ReplaceAll(message, "\\n", "\n")
 	message = strings.TrimSpace(message)
 
-	var current = fmt.Sprintf("%s: %s\n\n%s", my.userName, message, my.botName)
-	var output = my.generate(current)
+	var current = fmt.Sprintf("%s: %s\n\n%s: ", my.userName, message, my.botName)
+	var output, _ = my.generate(current)
 	return output
 }
 
-func (my *Chatbot) generate(text string) string {
-	var tokens, _ = my.model.Encode(text)
+func (my *Chatbot) generate(text string) (string, error) {
+	var tokens, err = my.model.Encode(text)
+	if err != nil {
+		return "", err
+	}
+
 	var state = make([]float32, len(my.promptState))
 	copy(state, my.promptState)
 	state, logits := my.runRnn(tokens, state, -999999999)
@@ -141,5 +151,5 @@ func (my *Chatbot) generate(text string) string {
 	}
 
 	var output = strings.Join(pieces, "")
-	return output
+	return output, nil
 }

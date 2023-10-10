@@ -7,63 +7,73 @@ import (
 	"bufio"
 	"embed"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 //go:embed rwkv_vocab_v20230424.txt
 var worldTokenizerFS embed.FS
 
-// TrieNode represents a node in the trie
-type TrieNode struct {
-	to     map[string]*TrieNode
-	values map[string]bool
-}
-
 // Trie represents the trie data structure
 type Trie struct {
-	Root *TrieNode
+	ch     byte
+	to     []*Trie
+	values map[int]byte
+	front  *Trie
 }
 
-// NewTrieNode initializes a new trie node
-func NewTrieNode() *TrieNode {
-	return &TrieNode{
-		to:     make(map[string]*TrieNode),
-		values: make(map[string]bool),
+func NewTrie(front *Trie, ch byte) *Trie {
+	var trie = &Trie{
+		ch:     ch,
+		to:     make([]*Trie, 256),
+		values: make(map[int]byte),
+		front:  front,
 	}
+
+	return trie
 }
 
-// Add inserts a key into the trie
-func (t *Trie) Add(val string) {
-	node := t.Root
-	for _, ch := range []rune(val) {
-		char := string(ch)
-		if node.to[char] == nil {
-			node.to[char] = NewTrieNode()
+func (my *Trie) Add(key string, idx int, val int) *Trie {
+	if idx == len(key) {
+		my.values[val] = 0
+		return my
+	}
+
+	var ch = key[idx]
+	if my.to[ch] == nil {
+		my.to[ch] = NewTrie(my, ch)
+	}
+
+	return my.to[ch].Add(key, idx+1, val)
+}
+
+func (my *Trie) FindLongest(key string, idx int) (int, *Trie, map[int]byte) {
+	var u = my
+	var ch = key[idx]
+
+	var retIndex int
+	var retTrie *Trie
+	var retValues map[int]byte
+
+	for u.to[ch] != nil {
+		u = u.to[ch]
+		idx += 1
+
+		if len(u.values) != 0 {
+			retIndex = idx
+			retTrie = u
+			retValues = u.values
 		}
-		node = node.to[char]
-	}
-	node.values[val] = true
-}
 
-// FindLongest finds the longest match in the trie for the given key
-func (t *Trie) FindLongest(key []rune) string {
-	node := t.Root
-	var matchedKey []rune
-	pos := 0
-	for i, ch := range key {
-		char := string(ch)
-		if node.to[char] == nil {
+		if idx == len(key) {
 			break
 		}
-		node = node.to[char]
-		if len(node.values) > 0 {
-			pos = i + 1
-			matchedKey = key[:pos]
-		}
+
+		ch = key[idx]
 	}
-	return string(matchedKey)
+
+	return retIndex, retTrie, retValues
 }
 
 // WorldTokenizer represents a tokenizer for encoding and decoding bytes to tokens
@@ -84,26 +94,34 @@ func NewWorldTokenizer() (*WorldTokenizer, error) {
 	wt := &WorldTokenizer{
 		IndexToToken: make(map[int]string),
 		TokenToIndex: make(map[string]int),
-		Trie:         &Trie{Root: NewTrieNode()},
+		Trie:         NewTrie(nil, 0),
 	}
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
-		fIndex := strings.Index(line, " ")
-		lIndex := strings.LastIndex(line, " ")
-		index, err := strconv.Atoi(line[:fIndex])
+		leftIndex := strings.Index(line, " ")
+		rightIndex := strings.LastIndex(line, " ")
+
+		index, err := strconv.Atoi(line[:leftIndex])
 		if err != nil {
 			return nil, err
 		}
-		rest := line[fIndex+1 : lIndex]
-		token, err := parseBytes(rest)
+
+		var size, err2 = strconv.Atoi(line[rightIndex+1:])
+		if err2 != nil {
+			return nil, err2
+		}
+
+		var input = line[leftIndex+1 : rightIndex]
+		token, err := parseInput(input, size)
 		if err != nil {
 			return nil, err
 		}
+
 		wt.IndexToToken[index] = token
 		wt.TokenToIndex[token] = index
-		wt.Trie.Add(token)
+		wt.Trie.Add(token, 0, index)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -114,32 +132,33 @@ func NewWorldTokenizer() (*WorldTokenizer, error) {
 }
 
 // EncodeBytes encodes bytes to tokens
-func (wt *WorldTokenizer) EncodeBytes(src []rune) ([]int, error) {
+func (wt *WorldTokenizer) EncodeBytes(src string) ([]int, error) {
 	var tokens []int
 	idx := 0
 	for idx < len(src) {
-		matchedKey := wt.Trie.FindLongest(src[idx:])
-		if len(matchedKey) <= 0 {
-			return nil, fmt.Errorf("can't encode current language: %s", string(src[idx:]))
+		var values map[int]byte
+		idx, _, values = wt.Trie.FindLongest(src, idx)
+		for token := range values {
+			tokens = append(tokens, token)
+			break
 		}
-		idx += len([]rune(matchedKey))
-		tokens = append(tokens, wt.TokenToIndex[matchedKey])
 	}
+
 	return tokens, nil
 }
 
 // DecodeBytes decodes tokens to bytes
-func (wt *WorldTokenizer) DecodeBytes(tokens []int) []rune {
-	var result []rune
+func (wt *WorldTokenizer) DecodeBytes(tokens []int) []byte {
+	var result []byte
 	for _, token := range tokens {
-		result = append(result, []rune(wt.IndexToToken[token])...)
+		result = append(result, []byte(wt.IndexToToken[token])...)
 	}
 	return result
 }
 
 // Encode encodes a string to tokens
 func (wt *WorldTokenizer) Encode(src string) ([]int, error) {
-	return wt.EncodeBytes([]rune(src))
+	return wt.EncodeBytes(src)
 }
 
 // Decode decodes tokens to a string
@@ -147,14 +166,44 @@ func (wt *WorldTokenizer) Decode(tokens []int) string {
 	return string(wt.DecodeBytes(tokens))
 }
 
-func parseBytes(s string) (string, error) {
-	if strings.HasPrefix(s, "b'") && strings.HasSuffix(s, "'") && len(s) > 3 {
-		// handle b'...'
-		return s[2 : len(s)-1], nil
+func parseInput(input string, size int) (string, error) {
+	var text = input
+	var isBinary = input[0] == 'b'
+	if isBinary {
+		text = text[1:]
 	}
-	if len(s) <= 0 {
-		return "", errors.New("rwkv_vocab_v20230424.txt vocab list broke, got vocab length equal zero")
+
+	if strings.HasPrefix(text, "'") && strings.HasSuffix(text, "'") {
+		text = strings.ReplaceAll(text, "\"", "\\\"")
+		text = "\"" + text[1:len(text)-1] + "\""
+		text = strings.ReplaceAll(text, "\\'", "'")
 	}
-	// handle ''
-	return s[1 : len(s)-1], nil
+
+	var raw, err1 = strconv.Unquote(text)
+	if err1 != nil {
+		return "", err1
+	}
+
+	var word = raw
+	var rawBytes = []byte(raw)
+	if len(rawBytes) != size {
+		var encoded = encode2UTF8(rawBytes)
+		word = string(encoded)
+
+		if len(encoded) != size {
+			return "", errors.New("invalid input")
+		}
+	}
+
+	return word, nil
+}
+
+func encode2UTF8(input []byte) []byte {
+	var buff = make([]byte, len(input)*utf8.UTFMax)
+	var length = 0
+	for _, b := range input {
+		length += utf8.EncodeRune(buff[length:], rune(b))
+	}
+
+	return buff[:length]
 }
