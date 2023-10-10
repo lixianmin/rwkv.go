@@ -48,32 +48,32 @@ func (my *Trie) Add(key string, idx int, val int) *Trie {
 	return my.to[ch].Add(key, idx+1, val)
 }
 
-func (my *Trie) FindLongest(key string, idx int) (int, *Trie, map[int]byte) {
+func (my *Trie) FindLongest(key string, index int) (retIndex int, retToken int) {
 	var u = my
-	var ch = key[idx]
-
-	var retIndex int
-	var retTrie *Trie
-	var retValues map[int]byte
+	var ch = key[index]
 
 	for u.to[ch] != nil {
 		u = u.to[ch]
-		idx += 1
+		index += 1
 
 		if len(u.values) != 0 {
-			retIndex = idx
-			retTrie = u
-			retValues = u.values
+			retIndex = index
+
+			// just use the first
+			for token := range u.values {
+				retToken = token
+				break
+			}
 		}
 
-		if idx == len(key) {
+		if index == len(key) {
 			break
 		}
 
-		ch = key[idx]
+		ch = key[index]
 	}
 
-	return retIndex, retTrie, retValues
+	return
 }
 
 // WorldTokenizer represents a tokenizer for encoding and decoding bytes to tokens
@@ -132,19 +132,16 @@ func NewWorldTokenizer() (*WorldTokenizer, error) {
 }
 
 // EncodeBytes encodes bytes to tokens
-func (wt *WorldTokenizer) EncodeBytes(src string) ([]int, error) {
+func (wt *WorldTokenizer) EncodeBytes(src string) []int {
 	var tokens []int
-	idx := 0
-	for idx < len(src) {
-		var values map[int]byte
-		idx, _, values = wt.Trie.FindLongest(src, idx)
-		for token := range values {
-			tokens = append(tokens, token)
-			break
-		}
+	var index, token = 0, 0
+
+	for index < len(src) {
+		index, token = wt.Trie.FindLongest(src, index)
+		tokens = append(tokens, token)
 	}
 
-	return tokens, nil
+	return tokens
 }
 
 // DecodeBytes decodes tokens to bytes
@@ -158,7 +155,7 @@ func (wt *WorldTokenizer) DecodeBytes(tokens []int) []byte {
 
 // Encode encodes a string to tokens
 func (wt *WorldTokenizer) Encode(src string) ([]int, error) {
-	return wt.EncodeBytes(src)
+	return wt.EncodeBytes(src), nil
 }
 
 // Decode decodes tokens to a string

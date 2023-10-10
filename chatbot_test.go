@@ -29,12 +29,13 @@ func TestNewChatbot(t *testing.T) {
 		panic(err)
 	}
 
-	var text = "\n"
+	var text = "\n\n"
 	var tokens, _ = model.Encode(text)
 	print(tokens)
 
 	var chatbot = NewChatbot(model, "果果", "初音未来", "你是初音未来, 我是果果, 我们是好朋友. 初始未来极其聪明伶俐, 擅长舞蹈. \n\n果果: 跳个舞吧\n\n初音未来: 好啊, 我最喜欢跳舞了. \n\n果果: 舞蹈跳得不跳哦, 再来一曲?\n\n初音未来: 没问题, 你想看什么? ")
 
+	fmt.Printf("-------------- begin of test")
 	var inputs = []string{"你在做什么呢?", "有没有想我呀?", "晚上吃什么呢?", "继续"}
 	for _, input := range inputs {
 		var startTime = time.Now()
