@@ -100,8 +100,9 @@ func (my *ChatModel) loadFromFile(path string) error {
 	return nil
 }
 
-func (my *ChatModel) Encode(input string) ([]int, error) {
-	return my.tokenizer.Encode(input)
+func (my *ChatModel) Encode(input string) []int {
+	var tokens, _ = my.tokenizer.Encode(input)
+	return tokens
 }
 
 func (my *ChatModel) Decode(input []int) string {

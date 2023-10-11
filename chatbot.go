@@ -2,6 +2,7 @@ package rwkv
 
 import (
 	"fmt"
+	"golang.org/x/exp/slices"
 	"math"
 	"strings"
 )
@@ -36,11 +37,7 @@ type Chatbot struct {
 }
 
 func NewChatbot(model *ChatModel, userName string, botName string, prompt string) *Chatbot {
-	var avoidRepeatTokens, err = model.Encode(AVOID_REPEAT)
-	if err != nil {
-		panic(err)
-	}
-
+	var avoidRepeatTokens = model.Encode(AVOID_REPEAT)
 	var chatbot = &Chatbot{
 		model:             model,
 		userName:          userName,
@@ -53,11 +50,7 @@ func NewChatbot(model *ChatModel, userName string, botName string, prompt string
 }
 
 func (my *Chatbot) initPrompt(prompt string) error {
-	var tokens, err = my.model.Encode(prompt)
-	if err != nil {
-		return err
-	}
-
+	var tokens = my.model.Encode(prompt)
 	var state, _ = my.runRnn(tokens, nil, 0)
 	my.promptState = state
 	return nil
@@ -69,11 +62,9 @@ func (my *Chatbot) runRnn(tokens []int, state []float32, newlineAdj float32) ([]
 
 	var lastIndex = len(tokens) - 1
 	var last = tokens[lastIndex]
-	for _, avoid := range my.avoidRepeatTokens {
-		if avoid == last {
-			logits[lastIndex] = -999999999
-			break
-		}
+
+	if slices.Contains(my.avoidRepeatTokens, last) {
+		logits[lastIndex] = -999999999
 	}
 
 	return state, logits
@@ -85,23 +76,18 @@ func (my *Chatbot) Process(message string) string {
 	message = strings.TrimSpace(message)
 
 	var current = fmt.Sprintf("%s: %s\n\n%s: ", my.userName, message, my.botName)
-	var output, _ = my.generate(current)
+	var output = my.generate(current)
 	return output
 }
 
-func (my *Chatbot) generate(text string) (string, error) {
-	var tokens, err = my.model.Encode(text)
-	if err != nil {
-		return "", err
-	}
-
-	var state = make([]float32, len(my.promptState))
-	copy(state, my.promptState)
+func (my *Chatbot) generate(text string) string {
+	var tokens = my.model.Encode(text)
+	var state = slices.Clone(my.promptState)
 	state, logits := my.runRnn(tokens, state, -999999999)
 
 	tokens = tokens[:0]
 	var outLast = 0
-	var occurrence = make(map[int]float32)
+	var existing = make(map[int]float32)
 
 	var chatLenShort = 40
 	var chatLenLong = 150
@@ -119,28 +105,24 @@ func (my *Chatbot) generate(text string) (string, error) {
 			newlineAdj = float32(math.Min(3.0, float64(i-chatLenLong)*0.25)) // MUST END THE GENERATION
 		}
 
-		for k, v := range occurrence {
+		for k, v := range existing {
 			logits[k] -= GEN_alpha_presence + v*GEN_alpha_frequency
 		}
 
 		var token, _ = SampleLogits(logits, GEN_TEMPERATURE, GEN_TOP_P, nil)
-		for xxx := range occurrence {
-			occurrence[xxx] *= GEN_penalty_decay
+		for xxx := range existing {
+			existing[xxx] *= GEN_penalty_decay
 		}
 
-		if _, ok := occurrence[token]; ok {
-			occurrence[token] += 1
-		} else {
-			occurrence[token] = 1
-		}
-
+		existing[token] += 1
 		tokens = append(tokens, token)
+
 		state, logits = my.runRnn([]int{token}, state, newlineAdj)
 		logits[END_OF_TEXT] = -999999999 // disable <|endoftext|>
 
-		var xxx = my.model.Decode(tokens[outLast:])
-		if !strings.Contains(xxx, "\ufffd") {
-			pieces = append(pieces, xxx)
+		var piece = my.model.Decode(tokens[outLast:])
+		if !strings.Contains(piece, "\ufffd") {
+			pieces = append(pieces, piece)
 			outLast = i + 1
 		}
 
@@ -151,5 +133,5 @@ func (my *Chatbot) generate(text string) (string, error) {
 	}
 
 	var output = strings.Join(pieces, "")
-	return output, nil
+	return output
 }
