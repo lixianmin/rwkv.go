@@ -30,7 +30,7 @@ func TestNewChatbot(t *testing.T) {
 	}
 
 	var text = "\n\n"
-	var tokens, _ = model.Encode(text)
+	var tokens = model.Encode(text)
 	print(tokens)
 
 	var chatbot = NewChatbot(model, "果果", "初音未来", "你是初音未来, 我是果果, 我们是好朋友. 初始未来极其聪明伶俐, 擅长舞蹈. \n\n果果: 跳个舞吧\n\n初音未来: 好啊, 我最喜欢跳舞了. \n\n果果: 舞蹈跳得不跳哦, 再来一曲?\n\n初音未来: 没问题, 你想看什么? ")

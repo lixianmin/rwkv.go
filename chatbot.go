@@ -34,6 +34,7 @@ type Chatbot struct {
 	botName           string
 	avoidRepeatTokens []int
 	promptState       []float32
+	stopTexts         []string
 }
 
 func NewChatbot(model *ChatModel, userName string, botName string, prompt string) *Chatbot {
@@ -43,6 +44,7 @@ func NewChatbot(model *ChatModel, userName string, botName string, prompt string
 		userName:          userName,
 		botName:           botName,
 		avoidRepeatTokens: avoidRepeatTokens,
+		stopTexts:         []string{"\n\n", userName + ": ", botName + ": "}, // 目前固定使用英文的:来进行分割讲话
 	}
 
 	_ = chatbot.initPrompt(prompt)
@@ -92,6 +94,7 @@ func (my *Chatbot) generate(text string) string {
 	var chatLenShort = 40
 	var chatLenLong = 150
 	var pieces = make([]string, 0, 16)
+	var stopText = ""
 
 	for i := 0; i < 999; i++ {
 		var newlineAdj float32 = 0
@@ -126,12 +129,47 @@ func (my *Chatbot) generate(text string) string {
 			outLast = i + 1
 		}
 
-		var sendMessage = my.model.Decode(tokens)
-		if strings.Contains(sendMessage, "\n\n") {
+		stopText = my.meetStopText(pieces)
+		if stopText != "" {
 			break
 		}
 	}
 
+	// 移除stopText尾巴
 	var output = strings.Join(pieces, "")
+	if len(stopText) != 0 {
+		output = output[:len(output)-len(stopText)]
+	}
+
 	return output
+}
+
+// 发现stopText尾巴, 就代表要结束了
+func (my *Chatbot) meetStopText(pieces []string) string {
+	for _, stopText := range my.stopTexts {
+		if isEndsWith(pieces, stopText) {
+			return stopText
+		}
+	}
+
+	return ""
+}
+
+// 判断pieces是否以stopText结尾
+func isEndsWith(pieces []string, stopText string) bool {
+	var k = len(stopText) - 1
+	for i := len(pieces) - 1; i >= 0; i-- {
+		var piece = pieces[i]
+		for j := len(piece) - 1; j >= 0; j-- {
+			if piece[j] != stopText[k] {
+				return false
+			} else if k == 0 {
+				return true
+			}
+
+			k--
+		}
+	}
+
+	return false
 }
