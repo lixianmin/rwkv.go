@@ -1,11 +1,10 @@
 module github.com/lixianmin/rwkv.go
 
-go 1.19
+go 1.21
 
 require (
-	github.com/ebitengine/purego v0.4.0
+	github.com/ebitengine/purego v0.5.0
 	github.com/sugarme/tokenizer v0.2.2
-	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 )
 
 require (

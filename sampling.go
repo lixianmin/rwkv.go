@@ -7,18 +7,13 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"slices"
 	"sort"
 	"time"
 )
 
 func softmax(out []float32) []float32 {
-	maxVal := out[0]
-	for _, val := range out {
-		if val > maxVal {
-			maxVal = val
-		}
-	}
-
+	maxVal := slices.Max(out)
 	expSum := float32(0.0)
 	for i := range out {
 		out[i] = float32(math.Exp(float64(out[i] - maxVal)))
@@ -50,8 +45,7 @@ func sampleProbs(probs []float32, temperature float32, topP float32, logitBias m
 	}
 
 	if logitBias != nil {
-		logits := make([]float32, len(probs))
-		copy(logits, probs)
+		logits := slices.Clone(probs)
 		for i := range logits {
 			logits[i] = float32(math.Log(float64(logits[i])))
 		}
@@ -76,8 +70,7 @@ func sampleProbs(probs []float32, temperature float32, topP float32, logitBias m
 	}
 
 	if topP < 1 {
-		sortedProbs := make([]float32, len(probs))
-		copy(sortedProbs, probs)
+		sortedProbs := slices.Clone(probs)
 		sort.Slice(sortedProbs, func(i, j int) bool { return sortedProbs[i] > sortedProbs[j] })
 
 		cumulativeProbs := make([]float32, len(sortedProbs))
@@ -93,6 +86,7 @@ func sampleProbs(probs []float32, temperature float32, topP float32, logitBias m
 				break
 			}
 		}
+
 		for i, p := range probs {
 			if p < cutoff {
 				probs[i] = 0
@@ -126,6 +120,7 @@ func argMax(slice []float32) int {
 			maxIndex = i
 		}
 	}
+
 	return maxIndex
 }
 
