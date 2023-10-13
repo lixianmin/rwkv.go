@@ -5,7 +5,8 @@ package rwkv
 
 import (
 	"errors"
-	"math"
+	"github.com/chewxy/math32"
+	"gorgonia.org/vecf32"
 	"math/rand"
 	"slices"
 	"sort"
@@ -16,23 +17,15 @@ func softmax(out []float32) []float32 {
 	maxVal := slices.Max(out)
 	expSum := float32(0.0)
 	for i := range out {
-		out[i] = float32(math.Exp(float64(out[i] - maxVal)))
+		out[i] = math32.Exp(out[i] - maxVal)
 		expSum += out[i]
 	}
 
-	for i := range out {
-		out[i] /= expSum
-	}
-
+	vecf32.ScaleInv(out, expSum)
 	return out
 }
 
 func SampleLogits(tensor []float32, temperature float32, topP float32, logitBias map[int]float32) (int, error) {
-	probs := softmax(tensor)
-	return sampleProbs(probs, temperature, topP, logitBias)
-}
-
-func sampleProbs(probs []float32, temperature float32, topP float32, logitBias map[int]float32) (int, error) {
 	if temperature < 0 {
 		return 0, errors.New("temperature must be non-negative")
 	}
@@ -44,10 +37,15 @@ func sampleProbs(probs []float32, temperature float32, topP float32, logitBias m
 		topP = 1
 	}
 
+	probs := softmax(tensor)
+	return sampleProbs(probs, temperature, topP, logitBias)
+}
+
+func sampleProbs(probs []float32, temperature float32, topP float32, logitBias map[int]float32) (int, error) {
 	if logitBias != nil {
 		logits := slices.Clone(probs)
 		for i := range logits {
-			logits[i] = float32(math.Log(float64(logits[i])))
+			logits[i] = math32.Log(logits[i])
 		}
 
 		for token, bias := range logitBias {
@@ -56,7 +54,7 @@ func sampleProbs(probs []float32, temperature float32, topP float32, logitBias m
 
 		expLogitsSum := float32(0.0)
 		for i := range logits {
-			logits[i] = float32(math.Exp(float64(logits[i])))
+			logits[i] = math32.Exp(logits[i])
 			expLogitsSum += logits[i]
 		}
 
@@ -66,11 +64,11 @@ func sampleProbs(probs []float32, temperature float32, topP float32, logitBias m
 	}
 
 	if temperature == 0 {
-		return argMax(probs), nil
+		return vecf32.Argmax(probs), nil
 	}
 
 	if topP < 1 {
-		sortedProbs := slices.Clone(probs)
+		var sortedProbs = slices.Clone(probs)
 		sort.Slice(sortedProbs, func(i, j int) bool { return sortedProbs[i] > sortedProbs[j] })
 
 		cumulativeProbs := make([]float32, len(sortedProbs))
@@ -94,34 +92,17 @@ func sampleProbs(probs []float32, temperature float32, topP float32, logitBias m
 		}
 	}
 
-	if temperature != 1 {
+	if temperature != 1 && temperature > 0 {
+		var invTemperature = 1.0 / temperature
 		for i := range probs {
-			probs[i] = float32(math.Pow(float64(probs[i]), float64(1/temperature)))
+			probs[i] = math32.Pow(probs[i], invTemperature)
 		}
 	}
 
-	probsSum := float32(0.0)
-	for _, p := range probs {
-		probsSum += p
-	}
-	for i := range probs {
-		probs[i] /= probsSum
-	}
+	var probsSum = vecf32.Sum(probs)
+	vecf32.ScaleInv(probs, probsSum)
 
 	return randomChoice(len(probs), probs), nil
-}
-
-func argMax(slice []float32) int {
-	maxIndex := 0
-	maxValue := slice[0]
-	for i, value := range slice {
-		if value > maxValue {
-			maxValue = value
-			maxIndex = i
-		}
-	}
-
-	return maxIndex
 }
 
 func randomChoice(length int, probabilities []float32) int {
