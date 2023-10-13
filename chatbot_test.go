@@ -17,8 +17,8 @@ func TestNewChatbot(t *testing.T) {
 	var modelPath = "/Users/xmli/Downloads/ai/models/world.q4_0"
 	var options = RwkvOptions{
 		MaxTokens:     100,
-		StopString:    "\n",
-		Temperature:   0.8,
+		StopString:    "\n\n",
+		Temperature:   1.2,
 		TopP:          0.5,
 		TokenizerType: World,
 		CpuThreads:    2, // 这个线程数不能开太多, 我的电脑一共才8个cpu, 开10线程会导致所有app都忙不过来

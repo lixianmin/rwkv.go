@@ -23,8 +23,8 @@ type RwkvOptions struct {
 	PrintError       bool
 	MaxTokens        int
 	StopString       string
-	Temperature      float32
-	TopP             float32
+	Temperature      float32 //It could be a good idea to increase temperature when top_p is low
+	TopP             float32 //Reduce top_p (to 0.5, 0.2, 0.1 etc.) for better Q&A accuracy (and less diversity)
 	TokenizerType    TokenizerType
 	CpuThreads       uint32
 	GpuEnable        bool

@@ -2,7 +2,6 @@ package rwkv
 
 import (
 	"fmt"
-	"math"
 	"slices"
 	"strings"
 )
@@ -15,9 +14,6 @@ Copyright (C) - All Rights Reserved
 *********************************************************************/
 
 const (
-	GEN_TEMPERATURE = 1.2 //It could be a good idea to increase temp when top_p is low
-	GEN_TOP_P       = 0.5 //Reduce top_p (to 0.5, 0.2, 0.1 etc.) for better Q&A accuracy (and less diversity)
-
 	GEN_alpha_presence  = 0.4 // Presence Penalty
 	GEN_alpha_frequency = 0.4 // Frequency Penalty
 	GEN_penalty_decay   = 0.996
@@ -96,7 +92,9 @@ func (my *Chatbot) generate(text string) string {
 	var pieces = make([]string, 0, 16)
 	var stopText = ""
 
-	for i := 0; i < 999; i++ {
+	var options = my.model.options
+
+	for i := 0; i < options.MaxTokens; i++ {
 		var newlineAdj float32 = 0
 		if i <= 0 {
 			newlineAdj = -999999999
@@ -105,16 +103,16 @@ func (my *Chatbot) generate(text string) string {
 		} else if i <= chatLenLong {
 			newlineAdj = 0
 		} else {
-			newlineAdj = float32(math.Min(3.0, float64(i-chatLenLong)*0.25)) // MUST END THE GENERATION
+			newlineAdj = min(3.0, float32(i-chatLenLong)*0.25) // MUST END THE GENERATION
 		}
 
 		for k, v := range existing {
 			logits[k] -= GEN_alpha_presence + v*GEN_alpha_frequency
 		}
 
-		var token, _ = SampleLogits(logits, GEN_TEMPERATURE, GEN_TOP_P, nil)
-		for xxx := range existing {
-			existing[xxx] *= GEN_penalty_decay
+		var token, _ = SampleLogits(logits, options.Temperature, options.TopP, nil)
+		for t := range existing {
+			existing[t] *= GEN_penalty_decay
 		}
 
 		existing[token] += 1
