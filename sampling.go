@@ -28,7 +28,7 @@ func SampleLogits(tensor v32.V32, temperature float32, topP float32, logitBias m
 
 func sampleProbs(probs v32.V32, temperature float32, topP float32, logitBias map[int]float32) (int, error) {
 	if logitBias != nil {
-		logits := probs.Clone()
+		var logits = probs.Clone()
 		logits.Log()
 
 		for token, bias := range logitBias {
@@ -36,10 +36,10 @@ func sampleProbs(probs v32.V32, temperature float32, topP float32, logitBias map
 		}
 
 		logits.Exp()
-		var expLogitsSum = logits.Sum()
+		var invSum = 1.0 / logits.Sum()
 
 		for i := range probs {
-			probs[i] = logits[i] / expLogitsSum
+			probs[i] = logits[i] * invSum
 		}
 	}
 
@@ -48,6 +48,22 @@ func sampleProbs(probs v32.V32, temperature float32, topP float32, logitBias map
 	}
 
 	// 把概率之和 <topP 的那些index过滤出来
+	filterTopP(probs, topP)
+
+	if temperature != 1 && temperature > 0 {
+		probs.Pow(1.0 / temperature)
+	}
+
+	// v1. 类似于重新把probs归一化, 使其所有成员的和等于1.0
+	// v2. 在randomChoice()中把random数值乘以realTopP, 不再需要归一化处理了
+	// v3. 归一化这事不能省, 作为logits的probs是要传出去, 用于其它地方的计算的
+	var probsSum = probs.Sum()
+	probs.Scale(1.0 / probsSum)
+
+	return randomChoice(probs), nil
+}
+
+func filterTopP(probs v32.V32, topP float32) {
 	if topP < 1 {
 		var sortedProbs = probs.Clone()
 		sort.Slice(sortedProbs, func(i, j int) bool { return sortedProbs[i] > sortedProbs[j] })
@@ -70,16 +86,6 @@ func sampleProbs(probs v32.V32, temperature float32, topP float32, logitBias map
 			}
 		}
 	}
-
-	if temperature != 1 && temperature > 0 {
-		probs.Pow(1.0 / temperature)
-	}
-
-	// 类似于重新把probs归一化, 使其所有成员的和等于1.0
-	var probsSum = probs.Sum()
-	probs.Scale(1.0 / probsSum)
-
-	return randomChoice(probs), nil
 }
 
 func randomChoice(probs v32.V32) int {

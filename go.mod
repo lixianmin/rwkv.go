@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/ebitengine/purego v0.5.0
-	github.com/lixianmin/v32 v32.0.0-20231013075619-37e64db512fb
+	github.com/lixianmin/v32 v32.0.0-20231013115312-a08500779246
 	github.com/sugarme/tokenizer v0.2.2
 )
 
