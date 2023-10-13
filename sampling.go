@@ -21,7 +21,7 @@ func softmax(out []float32) []float32 {
 		expSum += out[i]
 	}
 
-	vecf32.ScaleInv(out, expSum)
+	vecf32.Scale(out, 1.0/expSum)
 	return out
 }
 
@@ -67,21 +67,20 @@ func sampleProbs(probs []float32, temperature float32, topP float32, logitBias m
 		return vecf32.Argmax(probs), nil
 	}
 
+	// 把概率之和 <topP 的那些index过滤出来
 	if topP < 1 {
 		var sortedProbs = slices.Clone(probs)
 		sort.Slice(sortedProbs, func(i, j int) bool { return sortedProbs[i] > sortedProbs[j] })
 
-		cumulativeProbs := make([]float32, len(sortedProbs))
-		cumulativeProbs[0] = sortedProbs[0]
-		for i := 1; i < len(sortedProbs); i++ {
-			cumulativeProbs[i] = cumulativeProbs[i-1] + sortedProbs[i]
-		}
-
-		cutoff := float32(0.0)
-		for i := 0; i < len(cumulativeProbs); i++ {
-			if cumulativeProbs[i] > topP {
-				cutoff = sortedProbs[i]
-				break
+		cutoff := sortedProbs[0]
+		if sortedProbs[0] < topP {
+			for i := 1; i < len(sortedProbs); i++ {
+				var last = sortedProbs[i]
+				sortedProbs[i] = sortedProbs[i-1] + last
+				if sortedProbs[i] > topP { // 因为 topP<1, 因此这个条件在循环过程中一定是有机会成立的
+					cutoff = last
+					break
+				}
 			}
 		}
 
@@ -100,7 +99,7 @@ func sampleProbs(probs []float32, temperature float32, topP float32, logitBias m
 	}
 
 	var probsSum = vecf32.Sum(probs)
-	vecf32.ScaleInv(probs, probsSum)
+	vecf32.Scale(probs, 1.0/probsSum)
 
 	return randomChoice(len(probs), probs), nil
 }
