@@ -147,7 +147,7 @@ func (my *ChatModel) generateResponse(state, logits []float32) (string, error) {
 	var options = my.options
 
 	for i := 0; i < options.MaxTokens; i++ {
-		token, err := SampleLogits(logits, options.Temperature, options.TopP, map[int]float32{})
+		token, err := SampleLogits(logits, options.Temperature, options.TopP, nil)
 		if err != nil {
 			return "", err
 		}

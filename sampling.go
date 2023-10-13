@@ -10,7 +10,7 @@ import (
 	"sort"
 )
 
-func SampleLogits(tensor v32.V32, temperature float32, topP float32, logitBias map[int]float32) (int, error) {
+func SampleLogits(logits v32.V32, temperature float32, topP float32, logitBias map[int]float32) (int, error) {
 	if temperature < 0 {
 		return 0, errors.New("temperature must be non-negative")
 	}
@@ -22,48 +22,49 @@ func SampleLogits(tensor v32.V32, temperature float32, topP float32, logitBias m
 		topP = 1
 	}
 
-	tensor.SoftMax()
-	return sampleProbs(tensor, temperature, topP, logitBias)
+	logits.SoftMax()
+	return sampleProbs(logits, temperature, topP, logitBias), nil
 }
 
-func sampleProbs(probs v32.V32, temperature float32, topP float32, logitBias map[int]float32) (int, error) {
+func sampleProbs(probs v32.V32, temperature float32, topP float32, logitBias map[int]float32) int {
 	if logitBias != nil {
-		var logits = probs.Clone()
-		logits.Log()
+		// 这段代码因为从来未用到, 所以先保持. 但看起来这个Clone()是没有意义的, 直接使用probs[]就好
+		var cloned = probs.Clone()
+		cloned.Log()
 
 		for token, bias := range logitBias {
-			logits[token] += bias
+			cloned[token] += bias
 		}
 
-		logits.Exp()
-		var invSum = 1.0 / logits.Sum()
+		cloned.Exp()
+		var invSum = 1.0 / cloned.Sum()
 
 		for i := range probs {
-			probs[i] = logits[i] * invSum
+			probs[i] = cloned[i] * invSum
 		}
 	}
 
 	if temperature == 0 {
-		return probs.Argmax(), nil
+		return probs.Argmax()
 	}
 
 	// 把概率之和 <topP 的那些index过滤出来
 	filterTopP(probs, topP)
 
+	// temperature过大, 会导致probs里的数值打平为1, 这样所有的备选的概率就都一样了.
+	// temperature过小会导致重复, temperature过大会导致胡说八道
+	// https://zhuanlan.zhihu.com/p/613428710
 	if temperature != 1 && temperature > 0 {
 		probs.Pow(1.0 / temperature)
 	}
 
-	// v1. 类似于重新把probs归一化, 使其所有成员的和等于1.0
-	// v2. 在randomChoice()中把random数值乘以realTopP, 不再需要归一化处理了
-	// v3. 归一化这事不能省, 作为logits的probs是要传出去, 用于其它地方的计算的
-	var probsSum = probs.Sum()
-	probs.Scale(1.0 / probsSum)
-
-	return randomChoice(probs), nil
+	// v1. 类似于重新把probs归一化, 使其所有成员的和等于1.0. 这不能省, 因为pow()修改probs[]的值
+	probs.Scale(1.0 / probs.Sum())
+	return randomChoice(probs)
 }
 
-func filterTopP(probs v32.V32, topP float32) {
+func filterTopP(probs v32.V32, topP float32) float32 {
+	var realTopP = topP
 	if topP < 1 {
 		var sortedProbs = probs.Clone()
 		sort.Slice(sortedProbs, func(i, j int) bool { return sortedProbs[i] > sortedProbs[j] })
@@ -75,6 +76,7 @@ func filterTopP(probs v32.V32, topP float32) {
 				sortedProbs[i] = sortedProbs[i-1] + last
 				if sortedProbs[i] > topP { // 因为 topP<1, 因此这个条件在循环过程中一定是有机会成立的
 					cutoff = last
+					realTopP = topP
 					break
 				}
 			}
@@ -86,6 +88,8 @@ func filterTopP(probs v32.V32, topP float32) {
 			}
 		}
 	}
+
+	return realTopP
 }
 
 func randomChoice(probs v32.V32) int {
