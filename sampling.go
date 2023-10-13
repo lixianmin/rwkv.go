@@ -75,26 +75,22 @@ func sampleProbs(probs v32.V32, temperature float32, topP float32, logitBias map
 		probs.Pow(1.0 / temperature)
 	}
 
-	// 这是重新把probs归一化
+	// 类似于重新把probs归一化, 使其所有成员的和等于1.0
 	var probsSum = probs.Sum()
 	probs.Scale(1.0 / probsSum)
 
-	return randomChoice(len(probs), probs), nil
+	return randomChoice(probs), nil
 }
 
-func randomChoice(length int, probabilities []float32) int {
-	cumulativeProbabilities := make([]float32, length)
-	cumulativeProbabilities[0] = probabilities[0]
-	for i := 1; i < length; i++ {
-		cumulativeProbabilities[i] = cumulativeProbabilities[i-1] + probabilities[i]
-	}
-
-	randomValue := rand.Float32()
-	for i, cp := range cumulativeProbabilities {
-		if randomValue <= cp {
+func randomChoice(probs v32.V32) int {
+	var sum = float32(0)
+	var random = rand.Float32()
+	for i, p := range probs {
+		sum += p
+		if random <= sum {
 			return i
 		}
 	}
 
-	return length - 1
+	return len(probs) - 1
 }
