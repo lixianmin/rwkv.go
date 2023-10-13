@@ -3,10 +3,14 @@ module github.com/lixianmin/rwkv.go
 go 1.21
 
 require (
-	github.com/chewxy/math32 v1.10.1
 	github.com/ebitengine/purego v0.5.0
+	github.com/lixianmin/v32 v32.0.0-20231013075619-37e64db512fb
 	github.com/sugarme/tokenizer v0.2.2
-	gorgonia.org/vecf32 v0.9.0
+)
+
+require (
+	github.com/chewxy/math32 v1.10.1 // indirect
+	gorgonia.org/vecf32 v0.9.0 // indirect
 )
 
 require (
