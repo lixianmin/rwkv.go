@@ -17,7 +17,7 @@ var libName = "librwkv-*.so"
 
 func getDl(gpu bool) []byte {
 	if gpu {
-		gpu, _ := GetGPUInfo()
+		//gpu, _ := GetGPUInfo()
 	}
 	if runtime.GOARCH == "amd64" {
 		return libRwkv
