@@ -16,7 +16,8 @@ var libRwkvAmd64 []byte
 //go:embed deps/darwin/librwkv_arm64.dylib
 var libRwkvArm []byte
 
-//var libName = "librwkv-*.dylib"
+// darwin compile need the following libName
+var libName = "librwkv-*.dylib"
 
 func getDl(gpu bool) []byte {
 	if runtime.GOARCH == "amd64" {
